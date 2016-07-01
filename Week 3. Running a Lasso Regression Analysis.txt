@@ -1,0 +1,178 @@
+Machine Learning for Data Analysis Course
+Wesleyan University
+
+Week 3. Lasso Regression
+
+Assignment: Running a Lasso Regression Analysis
+
+The LendingClub (https://www.lendingclub.com/) is a peer-to-peer leading company that directly connects borrowers and potential lenders/investors. In this job, we will build a classification model to predict whether or not a loan provided by LendingClub is likely to default, that is, to predict whether a loan will be paid off in full or the loan will be charged off and possibly go into default.
+
+A lasso regression analysis was conducted to identify a subset of variables from a pool of 67 categorical and quantitative predictor variables that best predicted a quantitative response variable safe loans. Categorical predictors included grade and sub-grade (two series of 8 and 35 binary categorical variables which classifies the kind of loan), the home_ownership status (4 classes), the purpose of the loan (12 classes) and the term of the loan (2 classes). Quantitative predictor variables include debt to income ratio, indicator if has borrower had a delinquincy, indicator if has borrower had 90 day or worse rating, percent of available credit being used and total late fees received to date. All predictor variables were standardized to have a mean of zero and a standard deviation of one.
+
+Data were randomly split into a training set that included 60% of the observations (N=73564) and a test set that included 40% of the observations (N=49043). The least angle regression algorithm with k=10 fold cross validation was used to estimate the lasso regression model in the training set, and the model was validated using the test set. The change in the cross validation average (mean) squared error at each step was used to identify the best subset of predictor variables.
+
+Figure 1. Change in the validation mean square error at each step
+
+---[w3.validation_mean2_error.png]---
+
+Of the 67 predictor variables, 49 were retained in the selected model. During the estimation process, total late fees received to date, 'A' grade loans, debt to income ratio, 36 months loans and loans for small bussiness were most strongly associated with safe loans, followed by 'E', 'F', 'B' and 'D' grade loans and the percent of available credit being used. Total late fees received to date, debt to income ratio and loans for small bussiness were negatively associated with safe loans and 'A' grade loans and 36 months loans were positively associated with safe loans. Other predictors associated with safers loans included 'B' grade loans, if home is mortgaged and loans for credit card payment. Other predictors associated with risky loans included 'C' to 'G' grade loans, one year or less of employment, if borrower had a delinquincy of house is rented. These 67 variables accounted for 8.0% of the variance in the safe loans response variable.
+
+
+Python source file, iPython Notebook and other related files could be found at https://github.com/MColosso/Wesleyan.-Machine-Learning-for-Data-Analysis
+
+
+SOURCE CODE
+
+#
+# Created on Mon Dec 14 16:26:46 2015
+# 
+# @author: jrose01
+# Modified by: mcolosso
+#
+get_ipython().magic('matplotlib inline')
+
+from pandas import Series, DataFrame
+import pandas as pd
+import numpy as np
+import os
+import matplotlib.pylab as plt
+from sklearn.cross_validation import train_test_split
+from sklearn.linear_model import LassoLarsCV
+
+#pd.set_option('display.float_format', lambda x:'%.3f'%x)
+plt.rcParams['figure.figsize'] = (15, 5)
+
+# Set current directory
+#os.chdir("C:/Users/MColosso/Documents/CURSOS/Wesleyan University/Machine Learning for Data Analysis")
+
+
+#
+# Data Engineering and Analysis
+#
+
+# Load the dataset
+loans = pd.read_csv("./LendingClub.csv", low_memory = False)
+
+# LendingClub.csv is a dataset taken from The LendingClub (https://www.lendingclub.com/)
+# which is a peer-to-peer leading company that directly connects borrowers and potential
+# lenders/investors
+
+
+#
+# Exploring the target column
+#
+
+# The target column (label column) of the dataset that we are interested in is called
+# `bad_loans`. In this column **1** means a risky (bad) loan **0** means a safe loan.
+#
+# In order to make this more intuitive, we reassign the target to be:
+# * ** 1 ** as a safe loan, 
+# * ** 0 ** as a risky (bad) loan. 
+#
+# We put this in a new column called `safe_loans`.
+
+loans['safe_loans'] = loans['bad_loans'].apply(lambda x : 1 if x == 0 else 0)
+loans.drop('bad_loans', axis = 1, inplace = True)
+
+# Select features to handle
+
+predictors = ['grade',                     # grade of the loan
+              'sub_grade',                 # sub-grade of the loan
+              'short_emp',                 # one year or less of employment
+              'emp_length_num',            # number of years of employment
+              'home_ownership',            # home_ownership status: own, mortgage or rent
+              'dti',                       # debt to income ratio
+              'purpose',                   # the purpose of the loan
+              'term',                      # the term of the loan
+              'last_delinq_none',          # has borrower had a delinquincy
+              'last_major_derog_none',     # has borrower had 90 day or worse rating
+              'revol_util',                # percent of available credit being used
+              'total_rec_late_fee',        # total late fees received to day
+             ]
+
+target = 'safe_loans'                      # prediction target (y) (+1 means safe, 0 is risky)
+
+# Extract the predictors and target columns
+loans = loans[predictors + [target]]
+
+# Delete rows where any or all of the data are missing
+data_clean = loans.dropna()
+
+# Convert categorical variables into binary variables
+data_clean = pd.get_dummies(data_clean, prefix_sep = '=')
+
+# Describe current dataset
+print((data_clean.describe()).T)
+
+# Extract new features names
+features = data_clean.columns.values
+features = features[features != target]
+
+
+#
+# Modeling and Prediction
+#
+
+predvar    = data_clean[features]
+predictors = predvar.copy()
+target     = data_clean.safe_loans
+
+# Standardize predictors to have mean=0 and sd=1
+from sklearn import preprocessing
+for attr in predictors.columns.values:
+    predictors[attr] = preprocessing.scale(predictors[attr].astype('float64'))
+
+# Split into training and testing sets
+pred_train, pred_test, tar_train, tar_test = train_test_split(predictors, target, 
+                                                              test_size = .4,
+                                                              random_state = 123)
+print('pred_train.shape', pred_train.shape)
+print('pred_test.shape',  pred_test.shape)
+print('tar_train.shape',  tar_train.shape)
+print('tar_test.shape',   tar_test.shape)
+
+# Specify the lasso regression model
+model = LassoLarsCV(cv = 10, precompute = False).fit(pred_train, tar_train)
+
+# Print variable names and regression coefficients
+print(pd.DataFrame([dict(zip(predictors.columns, model.coef_))], index=['coef']).T)
+
+# Plot coefficient progression
+m_log_alphas = -np.log10(model.alphas_)
+ax = plt.gca()
+plt.plot(m_log_alphas, model.coef_path_.T)
+plt.axvline(-np.log10(model.alpha_), linestyle = '--', color = 'k',
+            label = 'alpha CV')
+plt.ylabel('Regression Coefficients')
+plt.xlabel('-log(alpha)')
+plt.title('Regression Coefficients Progression for Lasso Paths')
+
+# Plot mean square error for each fold
+m_log_alphascv = -np.log10(model.cv_alphas_)
+plt.figure()
+plt.plot(m_log_alphascv, model.cv_mse_path_, ':')
+plt.plot(m_log_alphascv, model.cv_mse_path_.mean(axis = -1), 'k',
+         label = 'Average across the folds', linewidth = 2)
+plt.axvline(-np.log10(model.alpha_), linestyle = '--', color = 'k',
+            label = 'alpha CV')
+plt.legend()
+plt.xlabel('-log(alpha)')
+plt.ylabel('Mean squared error')
+plt.title('Mean squared error on each fold')
+
+# MSE from training and test data
+from sklearn.metrics import mean_squared_error
+train_error = mean_squared_error(tar_train, model.predict(pred_train))
+test_error = mean_squared_error(tar_test, model.predict(pred_test))
+print ('training data MSE')
+print(train_error)
+print ('test data MSE')
+print(test_error)
+
+# R-square from training and test data
+rsquared_train = model.score(pred_train, tar_train)
+rsquared_test  = model.score(pred_test, tar_test)
+print ('training data R-square')
+print(rsquared_train)
+print ('test data R-square')
+print(rsquared_test)
